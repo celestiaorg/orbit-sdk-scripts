@@ -177,9 +177,12 @@ async function main(): Promise<void> {
   console.log(`Rollup:                   ${deployment.contracts.rollup}`);
   console.log(`Inbox:                    ${deployment.contracts.inbox}`);
   console.log(`Outbox:                   ${deployment.contracts.outbox}`);
+  console.log(`Rollup Event Inbox:       ${args.rollupEventInbox}`);
+  console.log(`Challenge Manager:        ${args.challengeManager}`);
   console.log(`Admin Proxy:              ${deployment.contracts.adminProxy}`);
   console.log(`Sequencer Inbox:          ${deployment.contracts.sequencerInbox}`);
   console.log(`Bridge:                   ${deployment.contracts.bridge}`);
+  console.log(`Upgrade Executor:         ${args.upgradeExecutor}`);
   console.log(`Validator Wallet Creator: ${deployment.contracts.validatorWalletCreator}`);
   console.log('═══════════════════════════════════════════════\n');
 

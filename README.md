@@ -97,8 +97,7 @@ This will verify all deployed proxy contracts on Etherscan, making them readable
 ├── src/
 │   └── types/
 │       └── index.ts             # TypeScript type definitions
-├── config/
-│   └── chain-config-template.json
+├── config/                      # Where node configs are saved
 ├── deployments/                 # Deployment records (auto-generated)
 ├── .env                         # Your configuration
 ├── tsconfig.json                # TypeScript configuration
