@@ -57,23 +57,24 @@ PARENT_CHAIN_ID=
 # Etherscan API (for verifying contracts)
 ETHERSCAN_API_KEY=your_etherscan_api_key
 
-# Your Orbit Chain Configuration
+# Your Orbit Chain Configuration (change this to be unique)
 CHAIN_ID=412346
 CHAIN_NAME=My Orbit Chain
 
-# Validators (comma-separated addresses)
+# Validators (comma-separated addresses if using multiple validators)
 VALIDATOR_ADDRESSES=0xYourValidatorAddress1,0xYourValidatorAddress2
 
-# Batch Poster (address that will post transaction batches)
+# Batch Poster (address that will post transaction batches if set)
 BATCH_POSTER_ADDRESS=0xYourBatchPosterAddress
 
 # Optional: Use custom ERC-20 token as gas token (leave empty for ETH)
 NATIVE_TOKEN_ADDRESS=
 
-WASM_ROOT=
+# Wasm root used for validation (find latest one here https://github.com/celestiaorg/nitro/releases?q=consensus&expanded=true)
+WASM_ROOT=0xf4daee8f6e64e300e0aa25ee193f39281c5023bcdfa6fb6298f4154091d61df1
 
-# Optional: Custom RollupCreator address (leave empty to use default Sepolia deployment)
-ROLLUP_CREATOR_ADDRESS=
+# Optional: Custom RollupCreator address (using default one in sepolia)
+ROLLUP_CREATOR_ADDRESS=0x91120076656d3f19E14c70453bBD353b098631C4
 
 DATA_AVAILABILITY_COMMITTEE=true
 MAX_DATA_SIZE=117964
