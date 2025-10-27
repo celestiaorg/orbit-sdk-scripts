@@ -71,7 +71,7 @@ BATCH_POSTER_ADDRESS=0xYourBatchPosterAddress
 NATIVE_TOKEN_ADDRESS=
 
 # Wasm root used for validation (find latest one here https://github.com/celestiaorg/nitro/releases?q=consensus&expanded=true)
-WASM_ROOT=0xf4daee8f6e64e300e0aa25ee193f39281c5023bcdfa6fb6298f4154091d61df1
+WASM_ROOT=0x597de35fc2ee60e5b2840157370d037542d6a4bc587af7f88202636c54e6bd8d
 
 # Optional: Custom RollupCreator address (using default one in sepolia)
 ROLLUP_CREATOR_ADDRESS=0x91120076656d3f19E14c70453bBD353b098631C4
