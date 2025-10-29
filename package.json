@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "deploy": "tsx scripts/deploy-orbit.ts",
+    "generate-docker-compose": "tsx scripts/generate-docker-compose.ts",
     "check-balance": "tsx scripts/check-balance.ts",
     "parse-deployment": "tsx scripts/parse-deployment.ts",
     "verify-contracts": "tsx scripts/verify-contracts.ts",

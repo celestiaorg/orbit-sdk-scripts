@@ -1,6 +1,7 @@
 import {
   createRollup,
   createRollupPrepareDeploymentParamsConfig,
+  createRollupPrepareTransactionReceipt,
   createRollupPrepareTransactionRequest,
   prepareChainConfig,
   prepareNodeConfig,
@@ -53,6 +54,12 @@ async function main(): Promise<DeploymentInfo> {
   // Validate environment variables
   if (!process.env.PRIVATE_KEY) {
     throw new Error('PRIVATE_KEY not set in .env');
+  }
+  if (!process.env.VALIDATOR_PRIVATE_KEY) {
+    throw new Error('VALIDATOR_PRIVATE_KEY not set in .env');
+  }
+  if (process.env.VALIDATOR_PRIVATE_KEY == process.env.PRIVATE_KEY) {
+    throw new Error('VALIDATOR_PRIVATE_KEY cannot be the same as PRIVATE_KEY or Batchposter Key!');
   }
   if (!process.env.PARENT_CHAIN_RPC) {
     throw new Error('PARENT_CHAIN_RPC not set in .env');
@@ -231,18 +238,13 @@ async function main(): Promise<DeploymentInfo> {
 
       if (decoded.eventName === 'RollupCreated') {
         const args = decoded.args as any;
-        coreContracts = {
-          rollup: args.rollupAddress,
-          inbox: args.inboxAddress,
-          outbox: args.outbox,
-          rollupEventInbox: args.rollupEventInbox,
-          challengeManager: args.challengeManager,
-          adminProxy: args.adminProxy,
-          sequencerInbox: args.sequencerInbox,
-          bridge: args.bridge,
-          upgradeExecutor: args.upgradeExecutor,
-          validatorWalletCreator: args.validatorWalletCreator,
-        };
+
+        const deployedAtBlock = receipt.blockNumber;
+
+        const txReceipt = createRollupPrepareTransactionReceipt(await parentChainPublicClient.getTransactionReceipt({ hash: txHash }))
+
+
+        coreContracts = txReceipt.getCoreContracts();
 
         console.log('✅ Found RollupCreated event\n');
         console.log('Core Contracts:');
@@ -355,6 +357,12 @@ async function main(): Promise<DeploymentInfo> {
           ),
         },
       };
+
+      // set data availability to false to avoid issues with nitro binary
+      nodeConfigWithDA.node['data-availability'].enable = false
+
+      // disable blob reader
+      nodeConfigWithDA.node['dangerous']['disable-blob-reader'] = true
 
 
       // Save node config
