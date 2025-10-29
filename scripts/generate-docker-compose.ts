@@ -93,6 +93,7 @@ function generateDockerCompose(nodeConfigPath: string, outputPath: string, optio
     // Build celestia server entrypoint
     const celestiaEntrypoint = [
         '/bin/celestia-server',
+        '--celestia.with-writer',
         '--celestia.namespace-id',
         celestiaNamespace.startsWith('0x') ? celestiaNamespace.slice(2) : celestiaNamespace,
         '--rpc-addr',
@@ -210,8 +211,11 @@ ${config.services['nitro-celestia-node'].command.map(c => `      - ${c}`).join('
 ${config.services['celestia-server'].entrypoint.map(e => `      - "${e}"`).join('\n')}
     ports:
 ${config.services['celestia-server'].ports.map(p => `      - "${p}"`).join('\n')}
-`;
 
+
+volumes:
+    node-data:
+`;
     return yaml;
 }
 
