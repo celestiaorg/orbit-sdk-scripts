@@ -104,14 +104,20 @@ This will:
 - ✅ Configure validators and batch poster
 - ✅ Save deployment info to `deployments/`
 
-### 6. Parse Deployment
+### 5. Generate Docker YAML
 
 ```bash
-npm run parse-deployment
+./quick-start.sh
 ```
 
-This extracts all contract addresses from the deployment transaction and updates the deployment file.
+to help you setup and run the docker YAML configuration script, you will need the URL to your celestia node and the auth token (with write access), and optionally provide a namespace (otherwise one will be generated for you).
 
+
+### 6. Run your chain
+
+```bash
+docker-compose up -d
+```
 
 ## 🔧 Configuration Options
 
