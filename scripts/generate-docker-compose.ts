@@ -36,21 +36,30 @@ interface DockerComposeConfig {
             container_name: string;
             entrypoint: string[];
             ports: string[];
+            volumes?: string[];
         };
     };
     volumes: {
         'node-data': null;
+        'celestia-keys'?: null;
     };
 }
 
-function generateDockerCompose(nodeConfigPath: string, outputPath: string, options: {
+interface CelestiaOptions {
     celestiaNamespace?: string;
     celestiaRpcEndpoint?: string;
     celestiaAuthToken?: string;
+    celestiaCoreNetwork?: string;
+    celestiaCoreToken?: string;
+    celestiaCoreUrl?: string;
+    celestiaEnableCoreTls?: boolean;
+    celestiaKeyPath?: string;
     nitroImage?: string;
     celestiaServerImage?: string;
     containerName?: string;
-}) {
+}
+
+function generateDockerCompose(nodeConfigPath: string, outputPath: string, options: CelestiaOptions) {
     // Read the node config
     const nodeConfigContent = fs.readFileSync(nodeConfigPath, 'utf-8');
     const nodeConfig: NodeConfig = JSON.parse(nodeConfigContent);
@@ -74,25 +83,47 @@ function generateDockerCompose(nodeConfigPath: string, outputPath: string, optio
         namespaceGenerated = true;
     }
 
-    // Check if RPC endpoint was provided
-    const celestiaRpcEndpoint = options.celestiaRpcEndpoint || 'https://rpc-mocha.pops.one';
-    const rpcNotProvided = !options.celestiaRpcEndpoint;
-
-    // Check if auth token was provided
-    const celestiaAuthToken = options.celestiaAuthToken;
-
-    // Extract parent chain URL for initialization
-    const parentChainUrl = nodeConfig['parent-chain']?.connection?.url || '';
+    // Set defaults for Celestia configuration
+    const celestiaRpcEndpoint = options.celestiaRpcEndpoint || 'http://0.0.0.0:26658/';
+    const celestiaCoreNetwork = options.celestiaCoreNetwork || 'mocha-4';
+    const celestiaCoreToken = options.celestiaCoreToken || '';
+    const celestiaCoreUrl = options.celestiaCoreUrl || '';
+    const celestiaEnableCoreTls = options.celestiaEnableCoreTls !== false; // default true
+    const celestiaAuthToken = options.celestiaAuthToken || '';
 
     const {
         nitroImage = 'ghcr.io/celestiaorg/nitro:v3.6.8',
-        celestiaServerImage = 'ghcr.io/celestiaorg/nitro-das-celestia:v0.6.2-mocha',
+        celestiaServerImage = 'ghcr.io/celestiaorg/nitro-das-celestia:v0.6.3-mocha',
         containerName = `orbit-${nodeConfig.chain.name.toLowerCase().replace(/\s+/g, '-')}`,
     } = options;
 
     // Build celestia server entrypoint
     const celestiaEntrypoint = [
         '/bin/celestia-server',
+        '--celestia.experimental-tx-client',
+        '--celestia.core-network',
+        celestiaCoreNetwork,
+    ];
+
+    // Add core token if provided
+    if (celestiaCoreToken) {
+        celestiaEntrypoint.push('--celestia.core-token');
+        celestiaEntrypoint.push(celestiaCoreToken);
+    }
+
+    // Add core URL if provided
+    if (celestiaCoreUrl) {
+        celestiaEntrypoint.push('--celestia.core-url');
+        celestiaEntrypoint.push(celestiaCoreUrl);
+    }
+
+    // Add TLS flag
+    if (celestiaEnableCoreTls) {
+        celestiaEntrypoint.push('--celestia.enable-core-tls');
+    }
+
+    // Continue with remaining required flags
+    celestiaEntrypoint.push(
         '--celestia.with-writer',
         '--celestia.namespace-id',
         celestiaNamespace.startsWith('0x') ? celestiaNamespace.slice(2) : celestiaNamespace,
@@ -103,13 +134,16 @@ function generateDockerCompose(nodeConfigPath: string, outputPath: string, optio
         '--celestia.rpc',
         celestiaRpcEndpoint,
         '--log-level',
-        'INFO',
-    ];
+        'DEBUG'
+    );
 
     // Add auth token if provided
     if (celestiaAuthToken) {
         celestiaEntrypoint.push('--celestia.auth-token');
         celestiaEntrypoint.push(celestiaAuthToken);
+    } else {
+        celestiaEntrypoint.push('--celestia.auth-token');
+        celestiaEntrypoint.push('');
     }
 
     // Build the Docker Compose config
@@ -152,6 +186,20 @@ function generateDockerCompose(nodeConfigPath: string, outputPath: string, optio
         },
     };
 
+    // Add celestia-server volumes if key path is provided
+    if (options.celestiaKeyPath) {
+        dockerCompose.services['celestia-server'].volumes = [
+            `${options.celestiaKeyPath}:/home/celestia/`,
+        ];
+        dockerCompose.volumes['celestia-keys'] = null;
+    } else {
+        // Even without a key path, we should create a volume for persistence
+        dockerCompose.services['celestia-server'].volumes = [
+            'celestia-keys:/home/celestia/',
+        ];
+        dockerCompose.volumes['celestia-keys'] = null;
+    }
+
     // Write the docker-compose.yml file
     const yamlContent = generateYaml(dockerCompose);
     fs.writeFileSync(outputPath, yamlContent);
@@ -163,20 +211,39 @@ function generateDockerCompose(nodeConfigPath: string, outputPath: string, optio
     console.log(`   Container Name: ${containerName}`);
     console.log(`   HTTP Port: ${httpPort} (mapped to host port 8547)`);
     console.log(`   Config File: ${nodeConfigPath} (mounted read-only)`);
-    console.log(`   Celestia Namespace: ${celestiaNamespace}`);
+    console.log(`\n🔵 Celestia Configuration:`);
+    console.log(`   Namespace: ${celestiaNamespace}`);
     if (namespaceGenerated) {
         console.log(`   ℹ️  Namespace was auto-generated from chain ID`);
     }
-    console.log(`   Celestia RPC: ${celestiaRpcEndpoint}`);
+    console.log(`   Core Network: ${celestiaCoreNetwork}`);
+    if (celestiaCoreToken) {
+        console.log(`   Core Token: ${celestiaCoreToken.substring(0, 20)}...`);
+    } else {
+        console.log(`   Core Token: (not provided)`);
+    }
+    if (celestiaCoreUrl) {
+        console.log(`   Core URL (gRPC): ${celestiaCoreUrl}`);
+    } else {
+        console.log(`   Core URL (gRPC): (not provided)`);
+    }
+    console.log(`   Enable Core TLS: ${celestiaEnableCoreTls}`);
+    console.log(`   RPC Endpoint: ${celestiaRpcEndpoint}`);
     if (celestiaAuthToken) {
-        console.log(`   Celestia Auth Token: ${celestiaAuthToken.substring(0, 20)}...`);
+        console.log(`   Auth Token: ${celestiaAuthToken.substring(0, 20)}...`);
+    } else {
+        console.log(`   Auth Token: (empty)`);
+    }
+    if (options.celestiaKeyPath) {
+        console.log(`   Key Path: ${options.celestiaKeyPath} (mounted to celestia-server)`);
+    } else {
+        console.log(`   Key Storage: Using Docker volume 'celestia-keys' for persistence`);
     }
 
-    if (rpcNotProvided) {
-        console.log(`\n⚠️  WARNING: No Celestia RPC endpoint provided!`);
-        console.log(`   Using default public endpoint: https://rpc-mocha.pops.one`);
-        console.log(`   For production, use your own Celestia node or a dedicated RPC provider.`);
-        console.log(`   You can update this in the generated docker-compose.yml file.`);
+    if (!celestiaCoreToken || !celestiaCoreUrl) {
+        console.log(`\n⚠️  WARNING: Core Token or Core URL not provided!`);
+        console.log(`   These are required for production use.`);
+        console.log(`   You can update them in the generated docker-compose.yml file.`);
     }
 
     console.log(`\n📖 Note: The Nitro node will read all configuration from the mounted nodeConfig.json file`);
@@ -189,7 +256,7 @@ function generateYaml(config: DockerComposeConfig): string {
 # Generated from nodeConfig.json
 #
 # The Nitro node reads all its configuration from the mounted config file.
-# Only the Celestia server settings need to be configured here.
+# Celestia server configuration is included with all required fields.
 
 services:
   nitro-celestia-node:
@@ -210,12 +277,27 @@ ${config.services['nitro-celestia-node'].command.map(c => `      - ${c}`).join('
     entrypoint:
 ${config.services['celestia-server'].entrypoint.map(e => `      - "${e}"`).join('\n')}
     ports:
-${config.services['celestia-server'].ports.map(p => `      - "${p}"`).join('\n')}
+${config.services['celestia-server'].ports.map(p => `      - "${p}"`).join('\n')}`;
 
+    // Add volumes section for celestia-server if present
+    if (config.services['celestia-server'].volumes && config.services['celestia-server'].volumes.length > 0) {
+        yaml += `
+    volumes:
+${config.services['celestia-server'].volumes.map(v => `      - ${v}`).join('\n')}`;
+    }
+
+    yaml += `
 
 volumes:
-    node-data:
-`;
+  node-data:`;
+
+    // Add celestia-keys volume if present
+    if (config.volumes['celestia-keys'] !== undefined) {
+        yaml += `
+  celestia-keys:`;
+    }
+
+    yaml += '\n';
     return yaml;
 }
 
@@ -238,24 +320,39 @@ The script automatically detects your config file:
   • If multiple files found, asks you to specify
 
 Options:
-  --config <path>              Path to nodeConfig.json (default: ./config/nodeConfig.json)
-  --output <path>              Output path for docker-compose.yml (default: ./docker-compose.yml)
-  --celestia-namespace <id>    Celestia namespace ID (auto-generated if not provided)
-  --celestia-rpc <url>         Celestia node RPC endpoint (defaults to public mocha endpoint)
-  --celestia-auth-token <tok>  Celestia auth token (required if using authenticated endpoint)
-  --nitro-image <image>        Nitro Docker image (default: ghcr.io/celestiaorg/nitro:v3.6.8)
-  --celestia-image <image>     Celestia server image (default: ghcr.io/celestiaorg/nitro-das-celestia:v0.4.3)
-  --container-name <name>      Container name (default: orbit-<chain-name>)
-  --help, -h                   Show this help message
+  --config <path>                 Path to nodeConfig.json (default: ./config/nodeConfig.json)
+  --output <path>                 Output path for docker-compose.yml (default: ./docker-compose.yml)
+
+  Celestia Configuration:
+  --celestia-namespace <id>       Celestia namespace ID (auto-generated if not provided)
+  --celestia-rpc <url>            Celestia node RPC endpoint (default: http://0.0.0.0:26658/)
+  --celestia-auth-token <token>   Celestia auth token (optional)
+  --celestia-core-network <name>  Celestia core network name (default: mocha-4)
+  --celestia-core-token <token>   Celestia core token (required for production)
+  --celestia-core-url <url>       Celestia core gRPC URL (e.g., grpc.celestia-mocha.com:9090)
+  --celestia-key-path <path>      Path to Celestia keys directory to mount
+  --celestia-enable-core-tls      Enable TLS for core connection (default: true)
+  --celestia-disable-core-tls     Disable TLS for core connection
+
+  Docker Images:
+  --nitro-image <image>           Nitro Docker image (default: ghcr.io/celestiaorg/nitro:v3.6.8)
+  --celestia-image <image>        Celestia server image (default: ghcr.io/celestiaorg/nitro-das-celestia:v0.6.3-mocha)
+  --container-name <name>         Container name (default: orbit-<chain-name>)
+
+  --help, -h                      Show this help message
 
 Examples:
-  # Minimal usage - namespace auto-generated, default RPC used
+  # Minimal usage - namespace auto-generated, defaults used
   tsx generate-docker-compose.ts
 
-  # With specific Celestia namespace and RPC
+  # Full Celestia configuration
   tsx generate-docker-compose.ts \\
-    --celestia-namespace 0x1234567890abcdef \\
-    --celestia-rpc https://rpc-mocha.pops.one
+    --celestia-namespace 0x1234567890abcdef1234 \\
+    --celestia-core-network mocha-4 \\
+    --celestia-core-token "your-core-token-here" \\
+    --celestia-core-url "grpc.celestia-mocha.com:9090" \\
+    --celestia-rpc "http://151.115.61.39:26658/" \\
+    --celestia-key-path "./celestia-keys"
 
   # Specify custom config location
   tsx generate-docker-compose.ts \\
@@ -265,18 +362,19 @@ Examples:
   tsx generate-docker-compose.ts \\
     --nitro-image ghcr.io/myorg/custom-nitro:v1.0.0
 
-What the generated docker-compose.yml does:
-  • Mounts ./config/nodeConfig.json as read-only into the container
-  • Uses --conf.file flag to tell Nitro to read from the config file
-  • All node configuration (sequencer, validator, keys, parent chain) comes from nodeConfig.json
-  • Only Celestia-specific settings need to be provided to this script
-  • Auto-generates a namespace if you don't provide one
-
-This approach is simpler than passing dozens of individual flags!
+Important Notes:
+  • The Core Token and Core URL are required for production use
+  • The Core URL should be a gRPC endpoint (usually port 9090)
+  • Do NOT include https:// in the Core URL
+  • The namespace must be exactly 10 bytes (20 hex characters)
+  • TLS is enabled by default for core connection
+  • If no key path is provided, keys will be stored in a Docker volume
+  • Key path should point to a directory containing Celestia keys
 `);
         process.exit(0);
     }
 
+    // Parse command line arguments
     const configIndex = args.indexOf('--config');
     const configPath = configIndex !== -1 ? args[configIndex + 1] : './config/nodeConfig.json';
 
@@ -291,6 +389,26 @@ This approach is simpler than passing dozens of individual flags!
 
     const authTokenIndex = args.indexOf('--celestia-auth-token');
     const celestiaAuthToken = authTokenIndex !== -1 ? args[authTokenIndex + 1] : undefined;
+
+    const coreNetworkIndex = args.indexOf('--celestia-core-network');
+    const celestiaCoreNetwork = coreNetworkIndex !== -1 ? args[coreNetworkIndex + 1] : undefined;
+
+    const coreTokenIndex = args.indexOf('--celestia-core-token');
+    const celestiaCoreToken = coreTokenIndex !== -1 ? args[coreTokenIndex + 1] : undefined;
+
+    const coreUrlIndex = args.indexOf('--celestia-core-url');
+    const celestiaCoreUrl = coreUrlIndex !== -1 ? args[coreUrlIndex + 1] : undefined;
+
+    const keyPathIndex = args.indexOf('--celestia-key-path');
+    const celestiaKeyPath = keyPathIndex !== -1 ? args[keyPathIndex + 1] : undefined;
+
+    // Handle TLS flag
+    let celestiaEnableCoreTls = true;
+    if (args.includes('--celestia-disable-core-tls')) {
+        celestiaEnableCoreTls = false;
+    } else if (args.includes('--celestia-enable-core-tls')) {
+        celestiaEnableCoreTls = true;
+    }
 
     const nitroImageIndex = args.indexOf('--nitro-image');
     const nitroImage = nitroImageIndex !== -1 ? args[nitroImageIndex + 1] : undefined;
@@ -336,6 +454,11 @@ This approach is simpler than passing dozens of individual flags!
             celestiaNamespace,
             celestiaRpcEndpoint: celestiaRpc,
             celestiaAuthToken,
+            celestiaCoreNetwork,
+            celestiaCoreToken,
+            celestiaCoreUrl,
+            celestiaEnableCoreTls,
+            celestiaKeyPath,
             nitroImage,
             celestiaServerImage: celestiaImage,
             containerName,
